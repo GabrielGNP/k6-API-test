@@ -7,6 +7,8 @@ const api2Duration = new Trend('api2_duration');
 const api3Duration = new Trend('api3_duration');
 const api4Duration = new Trend('api4_duration');
 const api5Duration = new Trend('api5_duration');
+const api6Duration = new Trend('api6_duration');
+
 
 const optionsGeneral = {
     executor: 'per-vu-iterations',
@@ -16,11 +18,21 @@ const optionsGeneral = {
 };
 export const options = {
   scenarios: {
-    API1: {...optionsGeneral, exec: 'API1_GetAllProductsList'},
-    API2: {...optionsGeneral, exec: 'API2_PostToAllProductsList'},
-    API3: {...optionsGeneral, exec: 'API3_GetAllBrandsList'},
-    API4: {...optionsGeneral, exec: 'API4_PutBrandsList'},
-    API5: {...optionsGeneral, exec: 'API5_PostSearchProduct'}
+    API1: {...optionsGeneral, exec: 'API1_GetAllProductsList', startTime: '0s'},
+    API2: {...optionsGeneral, exec: 'API2_PostToAllProductsList', startTime: '2s'},
+    API3: {...optionsGeneral, exec: 'API3_GetAllBrandsList', startTime: '4s'},
+    API4: {...optionsGeneral, exec: 'API4_PutBrandsList', startTime: '6s'},
+    API5: {...optionsGeneral, exec: 'API5_PostSearchProduct', startTime: '8s'},
+    API6: {...optionsGeneral, exec: 'API6_PostSearchProductWithoutParam', startTime: '10s'},
+    
+  },
+  thresholds: {
+    'api1_duration': ['p(95)<500'], 
+    'api2_duration': ['p(95)<500'],  
+    'api3_duration': ['p(95)<500'],
+    'api4_duration': ['p(95)<500'],
+    'api5_duration': ['p(95)<500'],
+    'api6_duration': ['p(95)<500']
   }
 };
 
@@ -113,4 +125,24 @@ export function API5_PostSearchProduct(){
         '(API5) Tiempo de solicitud < 500ms':(res)=>res.timings.duration < 500
     });
     sleep(1);
+}
+export function API6_PostSearchProductWithoutParam() {
+  const start = Date.now();
+  const url = `${base_url}/searchProduct`;
+  
+  // Enviar request sin parámetro search_product
+  const payload = JSON.stringify({});
+  const res = http.post(url, payload, {
+    headers: { 'Content-Type': 'application/json' },
+    tags: { name: 'API6' }
+  });
+  
+  api6Duration.add(Date.now() - start);  // Registrar tiempo en métrica
+  
+  check(res, {
+    '(API6) status 400': (r) => r.status === 400,
+    '(API6) error message present': (r) => r.body.includes('Bad request'),
+    '(API6) response time < 500ms': (r) => r.timings.duration < 500
+  });
+  sleep(1);
 }
