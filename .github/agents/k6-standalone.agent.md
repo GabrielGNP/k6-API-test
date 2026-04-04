@@ -97,7 +97,7 @@ PASO 2 — FILTRADO POR STATUS (si usa k6-tests.md)
 
 PASO 3 — GENERACIÓN DE ARCHIVO ÚNICO CON SCENARIOS Y METRICS
 ==============================================================
-Genera UN ÚNICO archivo: `tests/k6-automation-test.js`
+Genera UN ÚNICO archivo: `k6-automation-test.js` (en la raíz)
 
 Contenido del archivo:
 ├─ Imports: http, check, sleep, Trend (de k6/metrics)
@@ -124,7 +124,7 @@ PASO 4 — VALIDACIÓN FINAL
 ✅ Cada función tiene check() con validaciones específicas
 ✅ Cada función termina con sleep(1)
 ✅ No hay URLs hardcodeadas (todas usan `base_url` o `__ENV`)
-✅ ¡Listo para ejecutar: k6 run tests/k6-automation-test.js!
+✅ ¡Listo para ejecutar: k6 run k6-automation-test.js!
 ```
 
 ## Ejemplo de uso con URL de documentación
@@ -180,20 +180,18 @@ PASO 4 — VALIDACIÓN FINAL
 
 ```
 .
-├── k6-tests.md                         ← Definición de casos de test
-├── tests/                              ← Scripts de test
-│   └── k6-automation-test.js           ← ARCHIVO ÚNICO (todos los casos)
-├── data/                               ← Datos de prueba
-│   ├── crear-producto.json
-│   ├── usuario.json
-│   └── buscar-producto.json
-├── config/                             ← Configuración
-│   └── config.js                       ← URLs, timeouts, credenciales
-├── helpers/                            ← Funciones reutilizables
-│   ├── auth.js                         ← Autenticación
-│   ├── utils.js                        ← Utilidades
-│   └── checks.js                       ← Checks comunes
-└── results/                            ← Resultados (HTML, JSON)
+├── k6-automation-test.js           ← ARCHIVO ÚNICO (todos los casos, en raíz)
+├── config/                         ← Configuración
+│   └── config.js                   ← URLs, timeouts, credenciales
+├── helpers/                        ← Funciones reutilizables
+│   ├── auth.js                     ← Autenticación
+│   ├── utils.js                    ← Utilidades
+│   └── checks.js                   ← Checks comunes
+├── data/                           ← Datos de prueba
+│   ├── caso-1.json
+│   ├── caso-2.json
+│   └── caso-3.json
+└── results/                        ← Resultados (HTML, JSON)
     └── (vacío al inicio)
 ```
 
@@ -201,16 +199,16 @@ PASO 4 — VALIDACIÓN FINAL
 
 ```bash
 # Ejecutar todos los casos (configuración por defecto - SMOKE)
-k6 run tests/k6-automation-test.js
+k6 run k6-automation-test.js
 
 # Ejecutar como LOAD test (con parámetros)
-k6 run tests/k6-automation-test.js --vus 10 --duration 60s
+k6 run k6-automation-test.js --vus 10 --duration 60s
 
 # Ejecutar con salida JSON
-k6 run tests/k6-automation-test.js -o json=results/output.json
+k6 run k6-automation-test.js -o json=results/output.json
 
 # Ejecutar con variable de entorno
-k6 run tests/k6-automation-test.js -e BASE_URL=https://staging.api.com
+k6 run k6-automation-test.js -e BASE_URL=https://staging.api.com
 
 # Ver resultados
 cat results/output.json
