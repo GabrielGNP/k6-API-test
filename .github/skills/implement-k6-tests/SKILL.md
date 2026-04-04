@@ -230,27 +230,50 @@ Archivo: `tests/k6-automation-test.js`
 ```javascript
 import http from 'k6/http';
 import { check, sleep } from 'k6';
+import { Trend } from 'k6/metrics';
 
+// Crear métrica Trend por cada API para trackear tiempos individuales
+const api1Duration = new Trend('api1_duration');
+const api2Duration = new Trend('api2_duration');
+const api3Duration = new Trend('api3_duration');
+const api4Duration = new Trend('api4_duration');
+const api5Duration = new Trend('api5_duration');
+
+// Configuración general reutilizable
+const optionsGeneral = {
+  executor: 'per-vu-iterations',
+  vus: 10,
+  iterations: 20
+};
+
+// Scenarios con exec para cada función
 export const options = {
-  vus: 2,
-  duration: '10s',
+  scenarios: {
+    API1: { ...optionsGeneral, exec: 'API1_GetProductsList' },
+    API2: { ...optionsGeneral, exec: 'API2_PostSearchProduct' },
+    API3: { ...optionsGeneral, exec: 'API3_GetBrandsList' },
+    API4: { ...optionsGeneral, exec: 'API4_PutBrandsList' },
+    API5: { ...optionsGeneral, exec: 'API5_DeleteProduct' },
+  },
   thresholds: {
-    http_req_failed: ['rate<0.1'],
-    http_req_duration: ['p(99)<2000'],
+    'api1_duration': ['p(95)<500'],  // API1: p95 < 500ms
+    'api2_duration': ['p(95)<500'],  // API2: p95 < 500ms
+    'api3_duration': ['p(95)<500'],  // API3: p95 < 500ms
+    'api4_duration': ['p(95)<500'],  // API4: p95 < 500ms
+    'api5_duration': ['p(95)<500'],  // API5: p95 < 500ms
   },
 };
 
 const base_url = __ENV.BASE_URL || 'https://api.example.com';
 
-export default function () {
-  // Llamar cada caso como función separada
-  API1_GetProductsList();
-  API2_GetBrandsList();
-}
-
-function API1_GetProductsList() {
+// ESCENARIO 1: Cada función es EXPORTADA (no hay default())
+export function API1_GetProductsList() {
+  const start = Date.now();
   const url = `${base_url}/api/productsList`;
-  const res = http.get(url);
+  const res = http.get(url, { tags: { name: 'API1' } });
+  
+  api1Duration.add(Date.now() - start);  // Registrar tiempo en métrica
+  
   check(res, {
     'API1 - status 200': (r) => r.status === 200,
     'API1 - response not empty': (r) => r.body.length > 0,
@@ -259,28 +282,44 @@ function API1_GetProductsList() {
   sleep(1);
 }
 
-function API2_GetBrandsList() {
-  const url = `${base_url}/api/brandsList`;
-  const res = http.get(url);
+// ESCENARIO 2
+export function API2_PostSearchProduct() {
+  const start = Date.now();
+  const url = `${base_url}/api/searchProduct`;
+  const payload = JSON.stringify({ search_product: 'notebook' });
+  const res = http.post(url, payload, {
+    headers: { 'Content-Type': 'application/json' },
+    tags: { name: 'API2' }
+  });
+  
+  api2Duration.add(Date.now() - start);  // Registrar tiempo
+  
   check(res, {
     'API2 - status 200': (r) => r.status === 200,
-    'API2 - response not empty': (r) => r.body.length > 0,
-    'API2 - has brands': (r) => r.body.includes('brands'),
+    'API2 - has products': (r) => r.body.includes('products'),
   });
   sleep(1);
 }
 
-
-// Más funciones...
-// API3_PostSearchProduct, API4_PutBrandList, etc.
-// Cada función sigue el mismo patrón.
+// ESCENARIO 3, 4, 5... (mismo patrón)
+// export function API3_GetBrandsList() { ... }
+// export function API4_PutBrandsList() { ... }
+// export function API5_DeleteProduct() { ... }
 ```
 
-**Notas sobre el archivo consolidado:**
-- ✅ Todas las funciones API (API1_, API2_, etc.) en un único archivo
-- ✅ Options configuradas por defecto (vus: 2, duration: '10s') — el usuario puede modificarlas
-- ✅ default() llama a TODAS las funciones (sin lógica HTTP)
-- ✅ El usuario puede cambiar las options según el tipo de test que ejecute:
+**Estructura del nuevo modelo:**
+- ✅ **Custom Metrics**: Cada API tiene su propia `Trend` para trackear tiempos independientes
+- ✅ **Scenarios**: Cada scenario ejecuta una función diferente con `exec`
+- ✅ **Funciones Exportadas**: API1_*, API2_*, etc. son `export function` (no `default()`)
+- ✅ **Thresholds por API**: Cada métrica tiene su propio criterio de aceptación
+- ✅ **Ejecución en Paralelo**: K6 ejecuta TODOS los scenarios al mismo tiempo
+- ✅ **Reportes Independientes**: Cada API genera su propio reporte de tiempos
+
+**Ventajas:**
+- 📊 `api1_duration: avg=120ms, p(95)=150ms` (SOLO API1)
+- 📊 `api2_duration: avg=140ms, p(95)=170ms` (SOLO API2)
+- 📊 Fácil identificar cuál API es lenta
+- ✅ El usuario puede cambiar tiempos de thresholds por API de forma independiente:
 
 Ejemplos de cómo cambiar el archivo para LOAD test:
 ```javascript
@@ -661,18 +700,26 @@ npm install --save-dev @types/k6
 
 ## Restricciones
 
-**Estructura obligatoria:**
-- Cada caso de test DEBE ser una función separada: `API<número>_<Descripción>()`
-- La función `default()` SOLO llama a las funciones de los casos (sin lógica de requests)
-- Cada función debe incluir `check()` con validaciones específicas del caso
-- Cada función debe terminar con `sleep(1)` para simular comportamiento humano
+**Estructura obligatoria (NUEVA: Scenarios + Custom Metrics):**
+- ✅ Importar `Trend` de `'k6/metrics'` para crear métricas personalizadas
+- ✅ Crear una métrica `Trend` por cada API: `const api1Duration = new Trend('api1_duration')`
+- ✅ Cada caso de test DEBE ser una función `export function` (exportada): `export function API1_GetProductsList()`
+- ✅ Configuración general reutilizable: `const optionsGeneral = { executor: 'per-vu-iterations', vus, iterations }`
+- ✅ Scenarios configurados: cada uno con `exec: 'API1_GetProductsList'` apuntando a su función
+- ✅ Thresholds por métrica: `'api1_duration': ['p(95)<500']` (criterio independiente por API)
+- ✅ NO hay `default()` — cada función es ejecutada por su scenario correspondiente
+- ✅ Cada función DEBE registrar tiempo: `api1Duration.add(Date.now() - start)`
+- ✅ Cada función debe incluir `check()` con validaciones específicas del caso
+- ✅ Cada función debe terminar con `sleep(1)` para simular comportamiento humano
+- ✅ Spread operator para reutilizar `optionsGeneral`: `{ ...optionsGeneral, exec: 'API1_GetProductsList' }`
 
 **Otros:**
 - Solo crear archivos en `tests/`, `config/`, `data/`, `helpers/` — nunca modificar código del usuario
 - No hardcodear URLs, tokens ni credenciales — usar `__ENV` o constante `base_url`
-- Cada script debe ser independiente y reutilizable
+- Cada función debe ser independiente y reutilizable
 - No usar `console.log()` en exceso (ralentiza tests)
 - Incluir checks() descriptivos en TODAS las funciones
 - Si no hay suficiente información de un endpoint, generar con `// TODO: completar` y preguntar al usuario
 - No inventar endpoints que no se hayan descubierto en la fuente
 - Respeto del campo `Status` en k6-tests.md — no sobrescribir IMPLEMENTED sin `--force`
+- Los tags en requests (`tags: { name: 'API1' }`) ayudan a identificar en reportes JSON

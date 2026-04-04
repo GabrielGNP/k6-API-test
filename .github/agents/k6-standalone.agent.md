@@ -95,27 +95,35 @@ PASO 2 — FILTRADO POR STATUS (si usa k6-tests.md)
 ├─ IMPLEMENTED → Omite (no sobrescribe) — a menos que use --force
 └─ Actualiza Status = IMPLEMENTED en k6-tests.md tras generar
 
-PASO 3 — GENERACIÓN DE ARCHIVO ÚNICO
-=====================================
+PASO 3 — GENERACIÓN DE ARCHIVO ÚNICO CON SCENARIOS Y METRICS
+==============================================================
 Genera UN ÚNICO archivo: `tests/k6-automation-test.js`
 
 Contenido del archivo:
-├─ TODAS las funciones API (API1_*, API2_*, API3_*, etc.)
-├─ Cada función = un caso de test (con check() y sleep())
-├─ default() = orquestador (llama a todas las funciones)
-├─ Options configuradas por defecto (vus: 2, duration: '10s' para SMOKE)
-└─ El usuario puede modificar options según el tipo de test deseado
+├─ Imports: http, check, sleep, Trend (de k6/metrics)
+├─ Custom Metrics: `const api1Duration = new Trend('api1_duration')` para cada API
+├─ Configuración: `optionsGeneral` reutilizable (executor, vus, iterations)
+├─ Scenarios: Uno por cada API con `exec: 'FunctionName'`
+├─ Thresholds: Criterios de aceptación por métrica (api1_duration, api2_duration, etc.)
+├─ Funciones Exportadas: `export function API1_*()`, `export function API2_*()`, etc.
+├─ Cada función registra tiempo en su métrica: `api1Duration.add(Date.now() - start)`
+└─ NO hay `default()` — cada función es ejecutada por su escenario
 
-Nota importante: NO generar múltiples archivos por tipo de test. Todo va en k6-automation-test.js
+Nota importante: NO generar múltiples archivos por tipo de test. TODO va en k6-automation-test.js con scenarios.
 
 PASO 4 — VALIDACIÓN FINAL
 =========================
 ✅ El archivo k6-automation-test.js existe en tests/
-✅ Cada función API tiene check() con validaciones específicas
-✅ default() llama a TODAS las funciones (sin lógica HTTP)
-✅ No hay URLs hardcodeadas (todas usan __ENV o config)
+✅ Imports incluyen `import { Trend } from 'k6/metrics'`
+✅ Custom Metrics creadas: `const api1Duration = new Trend('api1_duration')` etc.
+✅ Config general: `optionsGeneral` con executor, vus, iterations
+✅ Scenarios configurados: cada uno con `exec: 'FunctionName'` correspondiente
+✅ Thresholds por métrica: `'api1_duration': ['p(95)<500']` para cada API
+✅ Funciones exportadas: `export function API1_*()`, `export function API2_*()`, etc.
+✅ Cada función tiene `apiXDuration.add(Date.now() - start)` para registrar tiempo
+✅ Cada función tiene check() con validaciones específicas
 ✅ Cada función termina con sleep(1)
-✅ Las options están configuradas (vus, duration, thresholds)
+✅ No hay URLs hardcodeadas (todas usan `base_url` o `__ENV`)
 ✅ ¡Listo para ejecutar: k6 run tests/k6-automation-test.js!
 ```
 
