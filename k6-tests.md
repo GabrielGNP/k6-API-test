@@ -65,4 +65,4 @@ Request Parameters:
     }
 Response Code: 404
 Response Message: User not found!
-Status: NOT_IMPLEMENTED
+Status: IMPLEMENTED

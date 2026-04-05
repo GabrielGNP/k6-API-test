@@ -10,6 +10,7 @@ const api5Duration = new Trend('api5_duration');
 const api6Duration = new Trend('api6_duration');
 const api8Duration = new Trend('api8_duration');
 const api9Duration = new Trend('api9_duration');
+const api10Duration = new Trend('api10_duration');
 
 
 const optionsGeneral = {
@@ -61,7 +62,11 @@ export const options = {
         exec: 'API9_DeleteToVerifyLogin',
         startTime: '70s'
     },
-    
+    API10: {
+        ...optionsGeneral,
+        exec: 'API10_PostToVerifyLoginWithInvalidDetails',
+        startTime: '80s'
+    },
   },
 //   thresholds: {
 //     'api1_duration': ['p(95)<500'], 
@@ -71,7 +76,8 @@ export const options = {
 //     'api5_duration': ['p(95)<500'],
 //     'api6_duration': ['p(95)<500'],
 //     'api8_duration': ['p(95)<500'],
-//     'api9_duration': ['p(95)<500']
+//     'api9_duration': ['p(95)<500'],
+//     'api10_duration': ['p(95)<500']
 //   }
 };
 
@@ -229,6 +235,27 @@ export function API9_DeleteToVerifyLogin() {
     '(API9) status 405': (r) => r.status === 405,
     '(API9) response message "This request method is not supported"': (r) => r.body.includes('This request method is not supported'),
     '(API9) response time < 500ms': (r) => r.timings.duration < 500
+  });
+  sleep(1);
+}
+export function API10_PostToVerifyLoginWithInvalidDetails() {
+  const start = Date.now();
+  const url = `${base_url}/verifyLogin`;
+  
+  // Enviar POST con email y password inválidos
+  const payload = 'email=invalid@test.com&password=wrongpassword';
+  const res = http.post(url, payload, {
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    tags: { name: 'API10' }
+  });
+  
+  api10Duration.add(Date.now() - start);  // Registrar tiempo en métrica
+  
+  check(res, {
+    '(API10)----------------------------------------': () => true === true,
+    '(API10) status 404': (r) => r.status === 404,
+    '(API10) response message "User not found!"': (r) => r.body.includes('User not found'),
+    '(API10) response time < 500ms': (r) => r.timings.duration < 500
   });
   sleep(1);
 }
