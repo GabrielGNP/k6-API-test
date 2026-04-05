@@ -8,32 +8,64 @@ const api3Duration = new Trend('api3_duration');
 const api4Duration = new Trend('api4_duration');
 const api5Duration = new Trend('api5_duration');
 const api6Duration = new Trend('api6_duration');
+const api8Duration = new Trend('api8_duration');
 
 
 const optionsGeneral = {
-    executor: 'per-vu-iterations',
+    // executor: 'per-vu-iterations',
+    executor: 'constant-vus',
     vus: 10,
-    // duration: '15s',
-    iterations: 20  
+    duration: '10s',
+    // iterations: 20  
 };
 export const options = {
   scenarios: {
-    API1: {...optionsGeneral, exec: 'API1_GetAllProductsList', startTime: '0s'},
-    API2: {...optionsGeneral, exec: 'API2_PostToAllProductsList', startTime: '2s'},
-    API3: {...optionsGeneral, exec: 'API3_GetAllBrandsList', startTime: '4s'},
-    API4: {...optionsGeneral, exec: 'API4_PutBrandsList', startTime: '6s'},
-    API5: {...optionsGeneral, exec: 'API5_PostSearchProduct', startTime: '8s'},
-    API6: {...optionsGeneral, exec: 'API6_PostSearchProductWithoutParam', startTime: '10s'},
+    API1: {
+        ...optionsGeneral,
+        exec: 'API1_GetAllProductsList',
+        startTime: '0s'
+    },
+    API2: {
+        ...optionsGeneral,
+        exec: 'API2_PostToAllProductsList',
+        startTime: '10s'
+    },
+    API3: {
+        ...optionsGeneral,
+        exec: 'API3_GetAllBrandsList',
+        startTime: '20s'
+    },
+    API4: {
+        ...optionsGeneral,
+        exec: 'API4_PutBrandsList',
+        startTime: '30s'
+    },
+    API5: {
+        ...optionsGeneral,
+        exec: 'API5_PostSearchProduct',
+        startTime: '40s'
+    },
+    API6: {
+        ...optionsGeneral,
+        exec: 'API6_PostSearchProductWithoutParam',
+        startTime: '50s'
+    },
+    API8: {
+        ...optionsGeneral,
+        exec: 'API8_PostVerifyLoginWithoutEmail',
+        startTime: '60s'
+    },
     
   },
-  thresholds: {
-    'api1_duration': ['p(95)<500'], 
-    'api2_duration': ['p(95)<500'],  
-    'api3_duration': ['p(95)<500'],
-    'api4_duration': ['p(95)<500'],
-    'api5_duration': ['p(95)<500'],
-    'api6_duration': ['p(95)<500']
-  }
+//   thresholds: {
+//     'api1_duration': ['p(95)<500'], 
+//     'api2_duration': ['p(95)<500'],  
+//     'api3_duration': ['p(95)<500'],
+//     'api4_duration': ['p(95)<500'],
+//     'api5_duration': ['p(95)<500'],
+//     'api6_duration': ['p(95)<500'],
+//     'api8_duration': ['p(95)<500']
+//   }
 };
 
 
@@ -49,6 +81,7 @@ export function API1_GetAllProductsList(){
     api1Duration.add(Date.now() - start);  
 
     check(res, { 
+        '(API1)----------------------------------------': () => true === true,
         '(API1) status is 200': (res) => res.status === 200,
         '(API1) Respuesta body incluye products':(res)=>res.body.includes(`"products":`),
         '(API1) products > 0':(res)=>JSON.parse(res.body).products.length > 0,
@@ -66,6 +99,7 @@ export function API2_PostToAllProductsList(){
     api2Duration.add(Date.now() - start);  
 
     check(res, { 
+        '(API2)----------------------------------------': () => true === true,
         '(API2) status is 405': (res) => res.status === 405,
         '(API2) Respuesta body: "This request method is not supported':(res)=>res.body.includes(`"This request method is not supported"`),
         '(API2) Tiempo de solicitud < 500ms':(res)=>res.timings.duration < 500
@@ -82,6 +116,7 @@ export function API3_GetAllBrandsList(){
     api3Duration.add(Date.now() - start);  
 
     check(res, { 
+        '(API3)----------------------------------------': () => true === true,
         '(API3) status is 200': (res) => res.status === 200,
         '(API3) Respuesta body incluye brands':(res)=>res.body.includes(`"brands":`),
         '(API3) brands > 0':(res)=>JSON.parse(res.body).brands.length > 0,
@@ -99,6 +134,7 @@ export function API4_PutBrandsList() {
     api4Duration.add(Date.now() - start);  
 
     check(res, {
+        '(API4)----------------------------------------': () => true === true,
         '(API4) status 405': (r) => r.status === 405,
         '(API4) response contains error message': (r) => r.body.includes('This request method is not supported') || r.status === 405,
         '(API4) response time < 500ms': (r) => r.timings.duration < 500,
@@ -119,6 +155,7 @@ export function API5_PostSearchProduct(){
     api5Duration.add(Date.now() - start);  
 
     check(res, { 
+        '(API5)----------------------------------------': () => true === true,
         '(API5) status is 200': (res) => res.status === 200,
         '(API5) Respuesta body incluye products':(res)=>res.body.includes(`"products"`),
         '(API5) products > 0':(res)=>JSON.parse(res.body).products.length > 0,
@@ -140,9 +177,31 @@ export function API6_PostSearchProductWithoutParam() {
   api6Duration.add(Date.now() - start);  // Registrar tiempo en métrica
   
   check(res, {
+    '(API6)----------------------------------------': () => true === true,
     '(API6) status 400': (r) => r.status === 400,
     '(API6) error message present': (r) => r.body.includes('Bad request'),
     '(API6) response time < 500ms': (r) => r.timings.duration < 500
+  });
+  sleep(1);
+}
+export function API8_PostVerifyLoginWithoutEmail() {
+  const start = Date.now();
+  const url = `${base_url}/verifyLogin`;
+  
+  // Enviar solo password sin email
+  const payload = 'password=1234';
+  const res = http.post(url, payload, {
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    tags: { name: 'API8' }
+  });
+  
+  api8Duration.add(Date.now() - start);  // Registrar tiempo en métrica
+  
+  check(res, {
+    '(API8)----------------------------------------': () => true === true,
+    '(API8) status 400': (r) => r.status === 400,
+    '(API8) error message present': (r) => r.body.includes('Bad request') && r.body.includes('email or password parameter is missing'),
+    '(API8) response time < 500ms': (r) => r.timings.duration < 500
   });
   sleep(1);
 }

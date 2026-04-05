@@ -43,7 +43,7 @@ Request Parameter:
   - form-data: {key:"password", value:"1234"}
 Response Message: Bad request, email or password parameter is missing in POST request.
 Timing duration: 500ms
-Status: NOT_IMPLEMENTED
+Status: IMPLEMENTED
 
 ## Caso 9
 título: API 9- DELETE To Verify Login
