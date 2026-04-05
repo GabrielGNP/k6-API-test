@@ -52,7 +52,7 @@ Request Method: DELETE
 Response Code: 405
 Response Message: This request method is not supported.
 Timing duration: 500ms
-Status: NOT_IMPLEMENTED
+Status: IMPLEMENTED
 
 ## Caso 10
 título: API 10- POST To Verify Login with invalid details

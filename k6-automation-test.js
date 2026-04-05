@@ -9,6 +9,7 @@ const api4Duration = new Trend('api4_duration');
 const api5Duration = new Trend('api5_duration');
 const api6Duration = new Trend('api6_duration');
 const api8Duration = new Trend('api8_duration');
+const api9Duration = new Trend('api9_duration');
 
 
 const optionsGeneral = {
@@ -55,6 +56,11 @@ export const options = {
         exec: 'API8_PostVerifyLoginWithoutEmail',
         startTime: '60s'
     },
+    API9: {
+        ...optionsGeneral,
+        exec: 'API9_DeleteToVerifyLogin',
+        startTime: '70s'
+    },
     
   },
 //   thresholds: {
@@ -64,7 +70,8 @@ export const options = {
 //     'api4_duration': ['p(95)<500'],
 //     'api5_duration': ['p(95)<500'],
 //     'api6_duration': ['p(95)<500'],
-//     'api8_duration': ['p(95)<500']
+//     'api8_duration': ['p(95)<500'],
+//     'api9_duration': ['p(95)<500']
 //   }
 };
 
@@ -202,6 +209,26 @@ export function API8_PostVerifyLoginWithoutEmail() {
     '(API8) status 400': (r) => r.status === 400,
     '(API8) error message present': (r) => r.body.includes('Bad request') && r.body.includes('email or password parameter is missing'),
     '(API8) response time < 500ms': (r) => r.timings.duration < 500
+  });
+  sleep(1);
+}
+export function API9_DeleteToVerifyLogin() {
+  const start = Date.now();
+  const url = `${base_url}/verifyLogin`;
+  
+  // Enviar DELETE request (método no soportado)
+  const res = http.del(url, null, {
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    tags: { name: 'API9' }
+  });
+  
+  api9Duration.add(Date.now() - start);  // Registrar tiempo en métrica
+  
+  check(res, {
+    '(API9)----------------------------------------': () => true === true,
+    '(API9) status 405': (r) => r.status === 405,
+    '(API9) response message "This request method is not supported"': (r) => r.body.includes('This request method is not supported'),
+    '(API9) response time < 500ms': (r) => r.timings.duration < 500
   });
   sleep(1);
 }
