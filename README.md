@@ -2,7 +2,7 @@
 
 Proyecto de automatización de pruebas de performance y carga utilizando **K6 Framework** contra la API de [Automation Exercise](https://automationexercise.com/).
 
-## 📋 Descripción
+## Descripción
 
 Este proyecto implementa pruebas de performance para validar el comportamiento de los siguientes endpoints:
 
@@ -16,7 +16,7 @@ Este proyecto implementa pruebas de performance para validar el comportamiento d
 - **API 9**: DELETE - Verificar login (método no permitido)
 - **API 10**: GET - Crear cuenta de usuario
 
-## 🚀 Requisitos Previos
+## Requisitos Previos
 
 - **K6**: Framework de testing de performance
 - **Node.js** (opcional, para utilidades adicionales)
@@ -33,7 +33,7 @@ K6/
 └── ANÁLISIS_RESULTADOS.md              ← Documento de análisis e interpretación
 ```
 
-## 🎯 Ejecución
+## Ejecución
 
 ### Comando Básico
 ```bash
