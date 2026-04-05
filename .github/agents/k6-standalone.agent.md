@@ -95,36 +95,57 @@ PASO 2 — FILTRADO POR STATUS (si usa k6-tests.md)
 ├─ IMPLEMENTED → Omite (no sobrescribe) — a menos que use --force
 └─ Actualiza Status = IMPLEMENTED en k6-tests.md tras generar
 
-PASO 3 — GENERACIÓN DE ARCHIVO ÚNICO CON SCENARIOS Y METRICS
-==============================================================
-Genera UN ÚNICO archivo: `k6-automation-test.js` (en la raíz)
+PASO 3 — GENERACIÓN DE ARCHIVO ÚNICO CON SCENARIOS, METRICS Y EJECUCIÓN SECUENCIAL
+==================================================================================
+Genera UN ÚNICO archivo: `k6-automation-test.js` (en la **raíz**, NO en tests/)
 
 Contenido del archivo:
 ├─ Imports: http, check, sleep, Trend (de k6/metrics)
 ├─ Custom Metrics: `const api1Duration = new Trend('api1_duration')` para cada API
-├─ Configuración: `optionsGeneral` reutilizable (executor, vus, iterations)
-├─ Scenarios: Uno por cada API con `exec: 'FunctionName'`
-├─ Thresholds: Criterios de aceptación por métrica (api1_duration, api2_duration, etc.)
+├─ Configuración: `optionsGeneral` reutilizable
+│   ├─ executor: 'constant-vus'     ⚠️ IMPORTANTE: constant-vus (NOT per-vu-iterations)
+│   ├─ vus: 10                       (10 usuarios virtuales)
+│   └─ duration: '10s'               (10 segundos por API)
+├─ Scenarios: Uno por cada API con `startTime` en SEGUNDOS para ejecución SECUENCIAL
+│   ├─ API1: { ...optionsGeneral, exec: 'API1_GetAllProductsList', startTime: '0s' }
+│   ├─ API2: { ...optionsGeneral, exec: 'API2_PostToAllProductsList', startTime: '10s' }
+│   ├─ API3: { ...optionsGeneral, exec: 'API3_GetAllBrandsList', startTime: '20s' }
+│   └─ Cada uno espera 10 segundos DESPUÉS de que termine el anterior
+├─ Thresholds: COMENTADOS POR DEFECTO (el usuario puede descomentar)
 ├─ Funciones Exportadas: `export function API1_*()`, `export function API2_*()`, etc.
-├─ Cada función registra tiempo en su métrica: `api1Duration.add(Date.now() - start)`
+│   ├─ Primera línea de checks es separator visual: `'(API1)----------------------------------------': () => true === true`
+│   ├─ Todos los checks tienen prefijo (API#): `'(API1) status is 200'`, `'(API1) time < 500ms'`
+│   ├─ Registra tiempo en métrica: `api1Duration.add(Date.now() - start)`
+│   ├─ Incluye validaciones específicas del API: status, contenido, tiempos
+│   └─ Termina con `sleep(1)` para simular comportamiento humano
 └─ NO hay `default()` — cada función es ejecutada por su escenario
 
-Nota importante: NO generar múltiples archivos por tipo de test. TODO va en k6-automation-test.js con scenarios.
+**Ejecución:**
+- API1: 0s a 10s (10 segundos)
+- API2: 10s a 20s (inicia cuando API1 termina)
+- API3: 20s a 30s (inicia cuando API2 termina)
+- **Total: N APIs × 10 segundos cada una**
+
+⚠️ IMPORTANTE: **NO generar múltiples archivos por tipo de test.** TODO va consolidado en UN ÚNICO archivo.
 
 PASO 4 — VALIDACIÓN FINAL
 =========================
-✅ El archivo k6-automation-test.js existe en tests/
+✅ El archivo `k6-automation-test.js` existe en la **raíz** del proyecto (no en tests/)
 ✅ Imports incluyen `import { Trend } from 'k6/metrics'`
 ✅ Custom Metrics creadas: `const api1Duration = new Trend('api1_duration')` etc.
-✅ Config general: `optionsGeneral` con executor, vus, iterations
-✅ Scenarios configurados: cada uno con `exec: 'FunctionName'` correspondiente
-✅ Thresholds por métrica: `'api1_duration': ['p(95)<500']` para cada API
+✅ Configuración general: `optionsGeneral` con executor: 'constant-vus', vus: 10, duration: '10s'
+✅ Scenarios configurados con `startTime` (0s, 10s, 20s, 30s, etc.): ejecución **SECUENCIAL**
+✅ Cada scenario tiene `exec: 'FunctionName'` correspondiente
+✅ Thresholds comentados con `/* ... */` (el usuario puede descomentar)
 ✅ Funciones exportadas: `export function API1_*()`, `export function API2_*()`, etc.
+✅ Cada función tiene separator check: `'(API#)----------------------------------------': () => true === true`
 ✅ Cada función tiene `apiXDuration.add(Date.now() - start)` para registrar tiempo
+✅ Todos los checks tienen prefijo (API#): `'(API1) status is 200'`
 ✅ Cada función tiene check() con validaciones específicas
 ✅ Cada función termina con sleep(1)
-✅ No hay URLs hardcodeadas (todas usan `base_url` o `__ENV`)
-✅ ¡Listo para ejecutar: k6 run k6-automation-test.js!
+✅ No hay URLs hardcodeadas (todas usan constante `base_url` o `__ENV`)
+✅ No hay `default()` — cada función es independiente
+✅ ¡Listo para ejecutar: `k6 run k6-automation-test.js`!
 ```
 
 ## Ejemplo de uso con URL de documentación
@@ -154,16 +175,32 @@ PASO 4 — VALIDACIÓN FINAL
 3. Incluye happy path + validaciones (checks)
 4. Configura VUs y duración apropiados
 
-## Tipos de test soportados
+## Tipos de test soportados (variantes de ejecución)
 
-| Tipo | Archivo | VUs | Duración | Uso |
-|------|---------|-----|----------|-----|
-| **SMOKE** | `<dominio>-smoke.js` | 2 | 10s | Verificación rápida de funcionalidad base |
-| **LOAD** | `<dominio>-load.js` | 10 | 60s | Carga normal sostenida |
-| **STRESS** | `<dominio>-stress.js` | 1→100 VUs | 180s | Encontrar límites del sistema |
-| **SPIKE** | `<dominio>-spike.js` | 50 picos | 120s | Simular picos de tráfico inesperados |
-| **SOAK** | `<dominio>-soak.js` | 5 | 3600s | Detectar memory leaks y problemas de larga duración |
-| **API** | `<dominio>-api.js` | 1 | 10s | Test simple de funcionalidad (default) |
+Todos los casos van en **UN ÚNICO archivo** (`k6-automation-test.js`). El tipo de test se define modificando los parámetros:
+
+| Tipo | Ejecución | VUs | Duración | Uso |
+|------|-----------|-----|----------|-----|
+| **SMOKE** (default) | Secuencial | 10 | 10s por API | Verificación rápida de funcionalidad |
+| **LOAD** | Secuencial aumentado | 20 | 10s por API | Carga normal sostenida |
+| **STRESS** | Secuencial con picos | 10→50→10 | Variable | Encontrar límites |
+| **SPIKE** | Secuencial con spike | 50+ | 10s pico | Simular picos de tráfico |
+| **SOAK** | Secuencial largo | 10 | 60s por API | Detectar memory leaks |
+
+**EJEMPLO:** Para ejecutar un LOAD test en lugar de SMOKE:
+```bash
+# SMOKE (default - ya configurado en el archivo)
+k6 run k6-automation-test.js
+
+# LOAD (modificar parámetros en línea)
+k6 run k6-automation-test.js --vus 20 --duration 60s
+
+# STRESS (modificar duration o usar ramping-vus)
+# Editar el archivo para cambiar executor y stages
+
+# SPIKE (modificar duration)
+k6 run k6-automation-test.js --vus 50 --duration 30s
+```
 
 ## Convenciones de naming
 
@@ -180,7 +217,8 @@ PASO 4 — VALIDACIÓN FINAL
 
 ```
 .
-├── k6-automation-test.js           ← ARCHIVO ÚNICO (todos los casos, en raíz)
+├── k6-automation-test.js           ← ARCHIVO ÚNICO (todos los casos, tests en paralelo secuencial)
+├── k6-tests.md                     ← Definición de casos (fuente de specs)
 ├── config/                         ← Configuración
 │   └── config.js                   ← URLs, timeouts, credenciales
 ├── helpers/                        ← Funciones reutilizables
@@ -188,21 +226,28 @@ PASO 4 — VALIDACIÓN FINAL
 │   ├── utils.js                    ← Utilidades
 │   └── checks.js                   ← Checks comunes
 ├── data/                           ← Datos de prueba
-│   ├── caso-1.json
-│   ├── caso-2.json
-│   └── caso-3.json
-└── results/                        ← Resultados (HTML, JSON)
-    └── (vacío al inicio)
+│   ├── crear-producto.json
+│   ├── usuario.json
+│   └── buscar-producto.json
+└── results/                        ← Resultados (generados en ejecución)
+    ├── output.json
+    └── output.html
 ```
+
+⚠️ **NOTA:** El archivo principal `k6-automation-test.js` está en la **RAÍZ** del proyecto, **NO** en una carpeta `tests/`.
 
 ## Ejecución básica
 
 ```bash
 # Ejecutar todos los casos (configuración por defecto - SMOKE)
+# Duración total: N APIs × 10s (ejecución SECUENCIAL)
 k6 run k6-automation-test.js
 
-# Ejecutar como LOAD test (con parámetros)
-k6 run k6-automation-test.js --vus 10 --duration 60s
+# Ejecutar como LOAD test (10 VUs, 60s por API)
+k6 run k6-automation-test.js --vus 20 --duration 60s
+
+# Ejecutar SOLO un API (para debugging)
+k6 run k6-automation-test.js --scenarios API1
 
 # Ejecutar con salida JSON
 k6 run k6-automation-test.js -o json=results/output.json
@@ -210,28 +255,22 @@ k6 run k6-automation-test.js -o json=results/output.json
 # Ejecutar con variable de entorno
 k6 run k6-automation-test.js -e BASE_URL=https://staging.api.com
 
-# Ver resultados
-cat results/output.json
+# Ver resultados (métricas independientes por API)
+# Output mostrará:
+#   ✓ api1_duration: avg=150ms, p(95)=250ms
+#   ✓ api2_duration: avg=120ms, p(95)=200ms
+#   ✓ api3_duration: avg=180ms, p(95)=300ms
 ```
 
-## Variantes de ejecución (sin crear múltiples archivos)
-
-1. **Smoke test rápido**
-   - 2-3 VUs por 10 segundos
-   - Valida que la API responde
-
-2. **Test de carga normal**
-   - 10-20 VUs por 60 segundos
-   - Simula tráfico esperado
-
-3. **Test de stress**
-   - Aumenta VUs gradualmente
-   - Encuentra el punto de ruptura
-
-4. **Test de spike**
-   - Picos repentinos de VUs
-   - Simula comportamiento impredecible
-
-5. **Test de soak**
-   - Pocos VUs por horas
-   - Encontrar memory leaks
+**Ejecución secuencial en detalle:**
+```bash
+# Si hay 7 APIs:
+time total = 7 APIs × 10s = 70 segundos
+API1: 0-10s
+API2: 10-20s
+API3: 20-30s
+API4: 30-40s
+API5: 40-50s
+API6: 50-60s
+API8: 60-70s (nota: API7 puede omitirse)
+```
