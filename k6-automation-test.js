@@ -114,7 +114,7 @@ export function API2_PostToAllProductsList(){
     check(res, { 
         '(API2)----------------------------------------': () => true === true,
         '(API2) status is 405': (res) => res.status === 405,
-        '(API2) Respuesta body: "This request method is not supported':(res)=>res.body.includes(`"This request method is not supported"`),
+        '(API2) Respuesta body: "This request method is not supported"':(res)=>res.body.includes(`"This request method is not supported"`),
         '(API2) Tiempo de solicitud < 500ms':(res)=>res.timings.duration < 500
     });
     sleep(1);
