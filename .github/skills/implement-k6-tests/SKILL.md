@@ -406,113 +406,89 @@ k6 run tests/brands/brands.js
 
 #### Archivo orquestador: `run-all.js` (en la raíz)
 
+⚠️ **PATRÓN SIN DUPLICACIÓN:** El orquestador IMPORTA funciones de los archivos de grupo, en lugar de duplicarlas.
+
 ```javascript
 /**
- * Orquestador de tests K6
- * Ejecuta todos los grupos funcionales secuencialmente
- * 
- * Uso:
- *   k6 run run-all.js
- *   k6 run run-all.js --vus 20 --duration 15s
+ * Orquestador central — importa tests desde archivos separados
+ * SIN DUPLICACIÓN: single source of truth
  */
 
-import { products } from './tests/products/products.js';
-import { brands } from './tests/brands/brands.js';
-import { auth } from './tests/auth/auth.js';
+// ===== PASO 1: IMPORTAR funciones desde los archivos de grupo =====
+import {
+  API1_GetAllProductsList,
+  API2_PostToAllProductsList,
+  API5_PostSearchProduct,
+  API6_PostSearchProductWithoutParam
+} from './tests/products/products.js';
 
-// Consolidar todos los scenarios de todos los grupos
+import {
+  API3_GetAllBrandsList,
+  API4_PutBrandsList
+} from './tests/brands/brands.js';
+
+import {
+  API8_PostVerifyLoginWithoutEmail,
+  API9_DeleteToVerifyLogin,
+  API10_PostToVerifyLoginWithInvalidDetails
+} from './tests/auth/auth.js';
+
+// ===== PASO 2: CONFIGURAR scenarios que las ejecutan =====
+const optionsGeneral = {
+  executor: 'constant-vus',
+  vus: 10,
+  duration: '10s',
+};
+
 export const options = {
   scenarios: {
-    // === PRODUCTS SCENARIOS ===
-    ProductsAPI1: {
-      executor: 'constant-vus',
-      vus: 10,
-      duration: '10s',
-      exec: 'ProductsAPI1_GetAllProductsList',
-      startTime: '0s'
-    },
-    ProductsAPI2: {
-      executor: 'constant-vus',
-      vus: 10,
-      duration: '10s',
-      exec: 'ProductsAPI2_PostToAllProductsList',
-      startTime: '10s'
-    },
-    ProductsAPI5: {
-      executor: 'constant-vus',
-      vus: 10,
-      duration: '10s',
-      exec: 'ProductsAPI5_PostSearchProduct',
-      startTime: '20s'
-    },
-    ProductsAPI6: {
-      executor: 'constant-vus',
-      vus: 10,
-      duration: '10s',
-      exec: 'ProductsAPI6_PostSearchProductWithoutParam',
-      startTime: '30s'
-    },
+    // Scenarios que ejecutan las funciones IMPORTADAS (sin duplicar código)
+    ProductsAPI1: { ...optionsGeneral, exec: 'ProductsAPI1_GetAllProductsList', startTime: '0s' },
+    ProductsAPI2: { ...optionsGeneral, exec: 'ProductsAPI2_PostToAllProductsList', startTime: '10s' },
+    ProductsAPI5: { ...optionsGeneral, exec: 'ProductsAPI5_PostSearchProduct', startTime: '20s' },
+    ProductsAPI6: { ...optionsGeneral, exec: 'ProductsAPI6_PostSearchProductWithoutParam', startTime: '30s' },
     
-    // === BRANDS SCENARIOS ===
-    BrandsAPI3: {
-      executor: 'constant-vus',
-      vus: 10,
-      duration: '10s',
-      exec: 'BrandsAPI3_GetAllBrandsList',
-      startTime: '40s'
-    },
-    BrandsAPI4: {
-      executor: 'constant-vus',
-      vus: 10,
-      duration: '10s',
-      exec: 'BrandsAPI4_PutBrandsList',
-      startTime: '50s'
-    },
+    BrandsAPI3: { ...optionsGeneral, exec: 'BrandsAPI3_GetAllBrandsList', startTime: '40s' },
+    BrandsAPI4: { ...optionsGeneral, exec: 'BrandsAPI4_PutBrandsList', startTime: '50s' },
     
-    // === AUTH SCENARIOS ===
-    AuthAPI8: {
-      executor: 'constant-vus',
-      vus: 10,
-      duration: '10s',
-      exec: 'AuthAPI8_PostVerifyLoginWithoutEmail',
-      startTime: '60s'
-    },
-    AuthAPI9: {
-      executor: 'constant-vus',
-      vus: 10,
-      duration: '10s',
-      exec: 'AuthAPI9_DeleteToVerifyLogin',
-      startTime: '70s'
-    },
-    AuthAPI10: {
-      executor: 'constant-vus',
-      vus: 10,
-      duration: '10s',
-      exec: 'AuthAPI10_PostToVerifyLoginWithInvalidDetails',
-      startTime: '80s'
-    },
+    AuthAPI8: { ...optionsGeneral, exec: 'AuthAPI8_PostVerifyLoginWithoutEmail', startTime: '60s' },
+    AuthAPI9: { ...optionsGeneral, exec: 'AuthAPI9_DeleteToVerifyLogin', startTime: '70s' },
+    AuthAPI10: { ...optionsGeneral, exec: 'AuthAPI10_PostToVerifyLoginWithInvalidDetails', startTime: '80s' },
   },
 };
 
-// Re-exportar funciones de cada grupo
-export { 
-  ProductsAPI1_GetAllProductsList,
-  ProductsAPI2_PostToAllProductsList,
-  ProductsAPI5_PostSearchProduct,
-  ProductsAPI6_PostSearchProductWithoutParam
-} from './tests/products/products.js';
-
+// ===== PASO 3: RE-EXPORTAR con alias para que los scenario names coincidan =====
+// K6 necesita que los nombres de funciones exportadas coincidan con el nombre en 'exec'
 export {
-  BrandsAPI3_GetAllBrandsList,
-  BrandsAPI4_PutBrandsList
-} from './tests/brands/brands.js';
-
-export {
-  AuthAPI8_PostVerifyLoginWithoutEmail,
-  AuthAPI9_DeleteToVerifyLogin,
-  AuthAPI10_PostToVerifyLoginWithInvalidDetails
-} from './tests/auth/auth.js';
+  API1_GetAllProductsList as ProductsAPI1_GetAllProductsList,
+  API2_PostToAllProductsList as ProductsAPI2_PostToAllProductsList,
+  API5_PostSearchProduct as ProductsAPI5_PostSearchProduct,
+  API6_PostSearchProductWithoutParam as ProductsAPI6_PostSearchProductWithoutParam,
+  
+  API3_GetAllBrandsList as BrandsAPI3_GetAllBrandsList,
+  API4_PutBrandsList as BrandsAPI4_PutBrandsList,
+  
+  API8_PostVerifyLoginWithoutEmail as AuthAPI8_PostVerifyLoginWithoutEmail,
+  API9_DeleteToVerifyLogin as AuthAPI9_DeleteToVerifyLogin,
+  API10_PostToVerifyLoginWithInvalidDetails as AuthAPI10_PostToVerifyLoginWithInvalidDetails
+};
 ```
+
+**Ventajas de este patrón (SIN duplicación):**
+- ✅ **DRY**: Una sola fuente de verdad (cambios solo en `tests/<grupo>/<grupo>.js`)
+- ✅ **Sincronizado**: Editar en `tests/products/products.js` se refleja automáticamente
+- ✅ **Menor tamaño**: `run-all.js` es ~50 líneas en lugar de 500+
+- ✅ **Mantenible**: No hay código duplicado que mantener
+- ✅ **Consolidado**: K6 reporta todas las métricas en un solo output
+
+**Comparación:**
+
+| Aspecto | ❌ Con duplicación | ✅ Sin duplicación |
+|--------|---|---|
+| Líneas en run-all.js | 500+ | ~50 |
+| Fuentes de verdad | 3 (run-all.js + grupo) | 1 (grupo) |
+| Cambios sincronizados | Manual | Automático |
+| Riesgo de inconsistencia | Alto | Bajo |
 
 **Ejecución del orquestador:**
 ```bash
@@ -534,22 +510,18 @@ k6 run run-all.js --vus 20 --duration 15s
 K6/
 ├── tests/
 │   ├── products/
-│   │   ├── products.js
-│   │   └── config.js
+│   │   └── products.js            # Exporta funciones (source of truth)
 │   ├── brands/
-│   │   ├── brands.js
-│   │   └── config.js
+│   │   └── brands.js              # Exporta funciones (source of truth)
 │   ├── auth/
-│   │   ├── auth.js
-│   │   └── config.js
-│   └── helpers/
-│       ├── checks.js
-│       ├── utils.js
-│       └── auth.js
-├── run-all.js                    # Ejecutar TODOS
-├── k6-tests.md                   # Definición (actualizado con Status)
-├── results.json                  # Resultados de ejecución
-└── html-report.html              # Reporte visual
+│   │   └── auth.js                # Exporta funciones (source of truth)
+│   ├── helpers/
+│   │   └── checks.js              # Checks reutilizables
+│   └── config.js                  # Configuración compartida
+├── run-all.js                      # Orquestador (IMPORTA del source)
+├── k6-tests.md                     # Definición (actualizado con Status)
+├── results.json                    # Resultados de ejecución
+└── html-report.html                # Reporte visual
 ```
 
 ### Paso 4: Generar archivos de configuración
