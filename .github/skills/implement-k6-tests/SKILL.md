@@ -37,6 +37,7 @@ Cada caso de test se define como un bloque `##` con campos clave-valor. El agent
 | Campo | Obligatorio | Descripción |
 |-------|-------------|-------------|
 | `Status` / `estado` | No | Estado del caso: `NOT_IMPLEMENTED`, `IMPLEMENTED` (default: `NOT_IMPLEMENTED`) |
+| `Group` / `grupo` | No | Grupo funcional para agrupación: "products", "auth", "brands", etc. (ej: "products") |
 | `título` / `title` | Sí | Nombre descriptivo del caso |
 | `API URL` / `url` / `endpoint` | Sí | URL completa o path relativo |
 | `Request Method` / `method` | Sí | GET, POST, PUT, DELETE, PATCH |
@@ -101,10 +102,29 @@ Status: NOT_IMPLEMENTED
 ### Agrupación automática
 
 El agente agrupa los casos por dominio funcional basándose en:
-- Prefijo de path común: `/api/productsList`, `/api/searchProduct` → grupo "products"
-- Palabras clave en el título: "Products", "Account", "Brand" → un grupo por cada una
-- Test Type: si hay mezcla, se generan archivos separados por tipo
-- Si no puede agrupar, crea un archivo `main.js` con todos
+- **Campo `Group`**: si se especifica en k6-tests.md, se usa directamente (ej: "products", "auth", "brands")
+- **Prefijo de path común**: `/api/productsList`, `/api/searchProduct` → grupo "products"
+- **Palabras clave en el título**: "Products", "Account", "Brand" → un grupo por cada una
+- **Test Type**: si especifican tipos distintos, se generan archivos separados por tipo
+- **Fallback**: si no puede agrupar, los tests van en un grupo "general"
+
+**Ejemplo de agrupación automática:**
+```
+Products:
+  - API1: GET /api/productsList
+  - API2: POST /api/productsList
+  - API5: POST /api/searchProduct
+  - API6: POST /api/searchProduct (sin param)
+
+Brands:
+  - API3: GET /api/brandsList
+  - API4: PUT /api/brandsList
+
+Auth:
+  - API8: POST /api/verifyLogin
+  - API9: DELETE /api/verifyLogin
+  - API10: POST /api/verifyLogin (invalid details)
+```
 
 ## Campo STATUS
 
@@ -209,251 +229,328 @@ Organizar los endpoints en grupos funcionales:
 - Por tag (si Swagger): usar los tags definidos
 - Por prefijo de path: `/users/*`, `/orders/*`, etc.
 
-### Paso 3: Generar .js consolidado (UN SOLO ARCHIVO)
+### Paso 3: Generar archivos .js organizados por grupo funcional
 
-⚠️ **IMPORTANTE:** Todos los casos de test van en un **ÚNICO archivo**: `k6-automation-test.js` en la **raíz del proyecto** (NO en carpeta tests/).
+✅ **IMPORTANTE:** Los tests se generan en **MÚLTIPLES ARCHIVOS** organizados por grupo funcional:
 
-El archivo contiene:
-- ✅ TODAS las funciones API (API1_*, API2_*, etc.) como funciones EXPORTADAS
-- ✅ Custom Metrics (Trend) para cada API (api1_duration, api2_duration, etc.)
-- ✅ Scenarios con ejecución SECUENCIAL vía `startTime` offsets
-- ✅ Executor `constant-vus` con 10 VUs y 10s de duración cada uno
-- ✅ Thresholds comentados por defecto (el usuario puede descomentar/modificar)
+```
+tests/
+├── products/
+│   ├── products.js           # API1, API2, API5, API6
+│   └── config.js             # configuración reutilizable
+├── brands/
+│   ├── brands.js             # API3, API4
+│   └── config.js
+├── auth/
+│   ├── auth.js               # API8, API9, API10
+│   └── config.js
+└── helpers/
+    ├── checks.js             # checks reutilizables
+    ├── utils.js              # utilidades comunes
+    └── auth.js               # helpers de autenticación (si es necesario)
 
-La ejecución es SECUENCIAL, no paralela:
-- API1 ejecuta de 0s a 10s
-- API2 ejecuta de 10s a 20s
-- API3 ejecuta de 20s a 30s
-- ... (total: número de APIs × 10s)
+run-all.js                     # Orquestador: ejecuta todos los grupos secuencialmente
+k6-tests.md                    # Definición de tests (actualizado con Status)
+```
 
-El usuario puede:
-- Ejecutar todos los casos: `k6 run k6-automation-test.js`
-- Ejecutar con parámetros custom: `k6 run k6-automation-test.js --vus 20 --duration 15s`
-- Descomentar thresholds para validar umbrales de rendimiento
+**Ventajas de esta estructura:**
+- 📁 **Mantenibilidad**: cada grupo es independiente
+- 🔧 **Escalabilidad**: agregar nuevo endpoint es agregar a su grupo
+- 🎯 **Ejecución selectiva**: `k6 run tests/products/products.js` solo products
+- 📊 **Métricas claras**: cada grupo reporta sus propias métricas
+- 🔗 **Config reutilizable**: helpers/config.js para todas las APIs
 
-#### Estructura del archivo consolidado
-
-Archivo: `k6-automation-test.js` (en la **RAÍZ** del proyecto, NO en tests/)
+#### Estructura de cada archivo de grupo (ej: `tests/products/products.js`)
 
 ```javascript
 import http from 'k6/http';
-import { check, sleep } from 'k6';
+import { sleep, check } from 'k6';
 import { Trend } from 'k6/metrics';
 
-// Crear métrica Trend por cada API (usando el número del API como ID)
-const api1Duration = new Trend('api1_duration');
-const api2Duration = new Trend('api2_duration');
-const api3Duration = new Trend('api3_duration');
-const api4Duration = new Trend('api4_duration');
-const api5Duration = new Trend('api5_duration');
-const api6Duration = new Trend('api6_duration');
-const api8Duration = new Trend('api8_duration');  // Nota: API7 se omite ejemplificando gaps
+// ===== CUSTOM METRICS =====
+const api1Duration = new Trend('products_api1_duration');
+const api2Duration = new Trend('products_api2_duration');
+const api5Duration = new Trend('products_api5_duration');
+const api6Duration = new Trend('products_api6_duration');
 
-// Configuración general reutilizable (constant-vus para ejecutar cada API 10s)
+// ===== CONFIGURACIÓN =====
 const optionsGeneral = {
-  executor: 'constant-vus',     // ⚠️ IMPORTANTE: constant-vus (NOT per-vu-iterations)
-  vus: 10,                       // 10 usuarios virtuales
-  duration: '10s',              // 10 segundos por API
+  executor: 'constant-vus',
+  vus: 10,
+  duration: '10s',
 };
 
-// Scenarios con exec para cada función + startTime para EJECUCIÓN SECUENCIAL
 export const options = {
   scenarios: {
-    API1: { ...optionsGeneral, exec: 'API1_GetAllProductsList', startTime: '0s' },
-    API2: { ...optionsGeneral, exec: 'API2_PostToAllProductsList', startTime: '10s' },
-    API3: { ...optionsGeneral, exec: 'API3_GetAllBrandsList', startTime: '20s' },
-    API4: { ...optionsGeneral, exec: 'API4_PutBrandsList', startTime: '30s' },
-    API5: { ...optionsGeneral, exec: 'API5_PostSearchProduct', startTime: '40s' },
-    API6: { ...optionsGeneral, exec: 'API6_PostSearchProductWithoutParam', startTime: '50s' },
-    API8: { ...optionsGeneral, exec: 'API8_PostVerifyLoginWithoutEmail', startTime: '60s' },
+    API1: {
+      ...optionsGeneral,
+      exec: 'API1_GetAllProductsList',
+      startTime: '0s'
+    },
+    API2: {
+      ...optionsGeneral,
+      exec: 'API2_PostToAllProductsList',
+      startTime: '10s'
+    },
+    API5: {
+      ...optionsGeneral,
+      exec: 'API5_PostSearchProduct',
+      startTime: '20s'
+    },
+    API6: {
+      ...optionsGeneral,
+      exec: 'API6_PostSearchProductWithoutParam',
+      startTime: '30s'
+    },
   },
-  
-  // Thresholds COMENTADOS por defecto (el usuario puede descomentar)
-  // Descomenta estos si quieres validar umbrales de rendimiento
+  // Thresholds comentados por defecto
   /*
   thresholds: {
-    'api1_duration': ['p(95)<500'],
-    'api2_duration': ['p(95)<500'],
-    'api3_duration': ['p(95)<500'],
-    'api4_duration': ['p(95)<500'],
-    'api5_duration': ['p(95)<500'],
-    'api6_duration': ['p(95)<500'],
-    'api8_duration': ['p(95)<500']
+    'products_api1_duration': ['p(95)<500'],
+    'products_api2_duration': ['p(95)<500'],
+    'products_api5_duration': ['p(95)<500'],
+    'products_api6_duration': ['p(95)<500']
   }
   */
 };
 
 const base_url = 'https://automationexercise.com/api';
 
-// FUNCIÓN API 1: Exportada para ejecutarse vía scenario
+// ===== FUNCIONES POR CASO =====
+
 export function API1_GetAllProductsList() {
   const start = Date.now();
   const url = `${base_url}/productsList`;
-  const res = http.get(url, { tags: { name: 'API1' } });
+  const res = http.get(url, { tags: { name: 'API1_Products' } });
   
   api1Duration.add(Date.now() - start);
   
   check(res, {
-    '(API1)----------------------------------------': () => true === true,  // Separator para legibilidad
-    '(API1) status is 200': (res) => res.status === 200,
-    '(API1) Respuesta body incluye products': (res) => res.body.includes(`"products":`),
-    '(API1) products > 0': (res) => JSON.parse(res.body).products.length > 0,
-    '(API1) Tiempo de solicitud < 500ms': (res) => res.timings.duration < 500
+    '(Products/API1)-----------------------------------------------': () => true === true,
+    '(Products/API1) status is 200': (r) => r.status === 200,
+    '(Products/API1) response includes products': (r) => r.body.includes('"products":'),
+    '(Products/API1) products array > 0': (r) => JSON.parse(r.body).products.length > 0,
+    '(Products/API1) response time < 500ms': (r) => r.timings.duration < 500,
   });
   sleep(1);
 }
 
-// FUNCIÓN API 2: POST con body
 export function API2_PostToAllProductsList() {
   const start = Date.now();
   const url = `${base_url}/productsList`;
-  const res = http.post(url, "This request method is not supported", { 
-    tags: { name: 'API2' }
+  const res = http.post(url, 'This request method is not supported', {
+    tags: { name: 'API2_Products' }
   });
   
   api2Duration.add(Date.now() - start);
   
   check(res, {
-    '(API2)----------------------------------------': () => true === true,  // Separator
-    '(API2) status is 405': (res) => res.status === 405,
-    '(API2) Respuesta incluye mensaje': (res) => res.body.includes(`"This request method is not supported"`),
-    '(API2) Tiempo de solicitud < 500ms': (res) => res.timings.duration < 500
+    '(Products/API2)-----------------------------------------------': () => true === true,
+    '(Products/API2) status is 405': (r) => r.status === 405,
+    '(Products/API2) response includes error message': (r) => r.body.includes('This request method is not supported'),
+    '(Products/API2) response time < 500ms': (r) => r.timings.duration < 500,
   });
   sleep(1);
 }
 
-// FUNCIÓN API 3
-export function API3_GetAllBrandsList() {
-  const start = Date.now();
-  const url = `${base_url}/brandsList`;
-  const res = http.get(url, { tags: { name: 'API3' } });
-  
-  api3Duration.add(Date.now() - start);
-  
-  check(res, {
-    '(API3)----------------------------------------': () => true === true,
-    '(API3) status is 200': (res) => res.status === 200,
-    '(API3) Respuesta body incluye brands': (res) => res.body.includes(`"brands":`),
-    '(API3) brands > 0': (res) => JSON.parse(res.body).brands.length > 0,
-    '(API3) Tiempo de solicitud < 500ms': (res) => res.timings.duration < 500
-  });
-  sleep(1);
-}
-
-// FUNCIÓN API 4
-export function API4_PutBrandsList() {
-  const start = Date.now();
-  const url = `${base_url}/brandsList`;
-  const res = http.put(url, null, { tags: { name: 'API4' } });
-  
-  api4Duration.add(Date.now() - start);
-  
-  check(res, {
-    '(API4)----------------------------------------': () => true === true,
-    '(API4) status es 405': (r) => r.status === 405,
-    '(API4) respuesta contiene error': (r) => r.body.includes('This request method is not supported') || r.status === 405,
-    '(API4) tiempo respuesta < 500ms': (r) => r.timings.duration < 500
-  });
-  sleep(1);
-}
-
-// FUNCIÓN API 5: POST con form-urlencoded
 export function API5_PostSearchProduct() {
   const start = Date.now();
   const url = `${base_url}/searchProduct`;
   const payload = 'search_product=top';
   const res = http.post(url, payload, {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    tags: { name: 'API5' }
+    tags: { name: 'API5_Products' }
   });
   
   api5Duration.add(Date.now() - start);
   
   check(res, {
-    '(API5)----------------------------------------': () => true === true,
-    '(API5) status is 200': (res) => res.status === 200,
-    '(API5) productos en respuesta': (res) => res.body.includes('products'),
-    '(API5) tiempo < 500ms': (res) => res.timings.duration < 500
+    '(Products/API5)-----------------------------------------------': () => true === true,
+    '(Products/API5) status is 200': (r) => r.status === 200,
+    '(Products/API5) response includes products': (r) => r.body.includes('products'),
+    '(Products/API5) response time < 500ms': (r) => r.timings.duration < 500,
   });
   sleep(1);
 }
 
-// FUNCIÓN API 6
 export function API6_PostSearchProductWithoutParam() {
   const start = Date.now();
   const url = `${base_url}/searchProduct`;
   const res = http.post(url, '', {
-    tags: { name: 'API6' }
+    tags: { name: 'API6_Products' }
   });
   
   api6Duration.add(Date.now() - start);
   
   check(res, {
-    '(API6)----------------------------------------': () => true === true,
-    '(API6) status is 400': (res) => res.status === 400,
-    '(API6) error message presente': (res) => res.body.includes('error'),
-    '(API6) tiempo < 500ms': (res) => res.timings.duration < 500
-  });
-  sleep(1);
-}
-
-// FUNCIÓN API 8 (nota: no hay API7)
-export function API8_PostVerifyLoginWithoutEmail() {
-  const start = Date.now();
-  const url = `${base_url}/verifyLogin`;
-  const res = http.post(url, '', {
-    tags: { name: 'API8' }
-  });
-  
-  api8Duration.add(Date.now() - start);
-  
-  check(res, {
-    '(API8)----------------------------------------': () => true === true,
-    '(API8) status is 400': (res) => res.status === 400,
-    '(API8) error message': (res) => res.body.includes('error'),
-    '(API8) tiempo < 500ms': (res) => res.timings.duration < 500
+    '(Products/API6)-----------------------------------------------': () => true === true,
+    '(Products/API6) status is 400': (r) => r.status === 400,
+    '(Products/API6) response includes error': (r) => r.body.includes('error'),
+    '(Products/API6) response time < 500ms': (r) => r.timings.duration < 500,
   });
   sleep(1);
 }
 ```
 
-**Estructura de este archivo:**
-
-| Elemento | Descripción |
-|----------|-------------|
-| **Custom Metrics** | `Trend` por cada API para capturar timing independiente |
-| **optionsGeneral** | Configuración reutilizable (constant-vus, 10 VUs, 10s) |
-| **Scenarios** | ejecutan secuencialmente: cada uno espera 10s más (startTime) |
-| **Separator line** | `'(API#)----------------------------------------': () => true === true` facilita lectura |
-| **Funciones exportadas** | Cada `export function API#_*()` es un escenario ejecutable |
-| **Tags** | `{ name: 'API#' }` para identificar requests en reportes K6 |
-| **Checks con prefijo** | Todos los checks incluyen `(API#)` en la descripción |
-| **Timing check** | `< 500ms` es un example (el usuario puede ajustar) |
-| **Thresholds** | Comentados por defecto (descomentar para habilitar validación) |
-
-**Ejecución:**
+**Ejecución de un grupo específico:**
 ```bash
-# Ejecutar totalmente (70 segundos: 7 APIs × 10s cada una)
-k6 run k6-automation-test.js
+# Solo tests de Products
+k6 run tests/products/products.js
 
-# Ejecutar SOLO API1 (útil para debugging)
-k6 run k6-automation-test.js --scenarios API1
+# Solo tests de Auth
+k6 run tests/auth/auth.js
 
-# Modificar VUs en línea de comandos
-k6 run k6-automation-test.js --vus 20
-
-# Ver métricas por API en el output:
-# ✓ api1_duration: avg=150ms, p(95)=250ms
-# ✓ api2_duration: avg=120ms, p(95)=200ms
+# Solo tests de Brands
+k6 run tests/brands/brands.js
 ```
 
-**Ventajas:**
-- 📊 Cada API reporta independent de timing (api#_duration)
-- 📊 Fácil identificar cuál API es lenta: `api3_duration: p(95)=800ms`
-- ⏱️ Ejecución SECUENCIAL evita contención de recursos
-- 🔧 El usuario puede descomentar thresholds para fallar si un API se degrada
-- ✅ Simple de agregar más APIs (copiar función + scenario)
-- 📝 Separator lines hacen los outputs más legibles
+#### Archivo orquestador: `run-all.js` (en la raíz)
+
+```javascript
+/**
+ * Orquestador de tests K6
+ * Ejecuta todos los grupos funcionales secuencialmente
+ * 
+ * Uso:
+ *   k6 run run-all.js
+ *   k6 run run-all.js --vus 20 --duration 15s
+ */
+
+import { products } from './tests/products/products.js';
+import { brands } from './tests/brands/brands.js';
+import { auth } from './tests/auth/auth.js';
+
+// Consolidar todos los scenarios de todos los grupos
+export const options = {
+  scenarios: {
+    // === PRODUCTS SCENARIOS ===
+    ProductsAPI1: {
+      executor: 'constant-vus',
+      vus: 10,
+      duration: '10s',
+      exec: 'ProductsAPI1_GetAllProductsList',
+      startTime: '0s'
+    },
+    ProductsAPI2: {
+      executor: 'constant-vus',
+      vus: 10,
+      duration: '10s',
+      exec: 'ProductsAPI2_PostToAllProductsList',
+      startTime: '10s'
+    },
+    ProductsAPI5: {
+      executor: 'constant-vus',
+      vus: 10,
+      duration: '10s',
+      exec: 'ProductsAPI5_PostSearchProduct',
+      startTime: '20s'
+    },
+    ProductsAPI6: {
+      executor: 'constant-vus',
+      vus: 10,
+      duration: '10s',
+      exec: 'ProductsAPI6_PostSearchProductWithoutParam',
+      startTime: '30s'
+    },
+    
+    // === BRANDS SCENARIOS ===
+    BrandsAPI3: {
+      executor: 'constant-vus',
+      vus: 10,
+      duration: '10s',
+      exec: 'BrandsAPI3_GetAllBrandsList',
+      startTime: '40s'
+    },
+    BrandsAPI4: {
+      executor: 'constant-vus',
+      vus: 10,
+      duration: '10s',
+      exec: 'BrandsAPI4_PutBrandsList',
+      startTime: '50s'
+    },
+    
+    // === AUTH SCENARIOS ===
+    AuthAPI8: {
+      executor: 'constant-vus',
+      vus: 10,
+      duration: '10s',
+      exec: 'AuthAPI8_PostVerifyLoginWithoutEmail',
+      startTime: '60s'
+    },
+    AuthAPI9: {
+      executor: 'constant-vus',
+      vus: 10,
+      duration: '10s',
+      exec: 'AuthAPI9_DeleteToVerifyLogin',
+      startTime: '70s'
+    },
+    AuthAPI10: {
+      executor: 'constant-vus',
+      vus: 10,
+      duration: '10s',
+      exec: 'AuthAPI10_PostToVerifyLoginWithInvalidDetails',
+      startTime: '80s'
+    },
+  },
+};
+
+// Re-exportar funciones de cada grupo
+export { 
+  ProductsAPI1_GetAllProductsList,
+  ProductsAPI2_PostToAllProductsList,
+  ProductsAPI5_PostSearchProduct,
+  ProductsAPI6_PostSearchProductWithoutParam
+} from './tests/products/products.js';
+
+export {
+  BrandsAPI3_GetAllBrandsList,
+  BrandsAPI4_PutBrandsList
+} from './tests/brands/brands.js';
+
+export {
+  AuthAPI8_PostVerifyLoginWithoutEmail,
+  AuthAPI9_DeleteToVerifyLogin,
+  AuthAPI10_PostToVerifyLoginWithInvalidDetails
+} from './tests/auth/auth.js';
+```
+
+**Ejecución del orquestador:**
+```bash
+# Ejecutar TODOS los grupos (90 segundos total: 9 APIs × 10s cada una)
+k6 run run-all.js
+
+# Con parámetros custom
+k6 run run-all.js --vus 20 --duration 15s
+
+# Ver métricas de cada grupo:
+# ✓ products_api1_duration: avg=150ms, p(95)=250ms
+# ✓ products_api2_duration: avg=120ms, p(95)=200ms
+# ✓ brands_api3_duration: avg=180ms, p(95)=300ms
+# ✓ auth_api8_duration: avg=200ms, p(95)=350ms
+```
+
+**Estructura final de la solución:**
+```
+K6/
+├── tests/
+│   ├── products/
+│   │   ├── products.js
+│   │   └── config.js
+│   ├── brands/
+│   │   ├── brands.js
+│   │   └── config.js
+│   ├── auth/
+│   │   ├── auth.js
+│   │   └── config.js
+│   └── helpers/
+│       ├── checks.js
+│       ├── utils.js
+│       └── auth.js
+├── run-all.js                    # Ejecutar TODOS
+├── k6-tests.md                   # Definición (actualizado con Status)
+├── results.json                  # Resultados de ejecución
+└── html-report.html              # Reporte visual
+```
 
 ### Paso 4: Generar archivos de configuración
 
